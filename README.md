@@ -1,3 +1,17 @@
+# Introduction by Katnips
+
+This repository contains an implementation of treePoinTr, a model designed for completing tree point clouds using the PoinTr architecture. The focus of this project is on fine-tuning treePoinTr with different datasets, conducting tests, and comparing the performance of PoinTr with AdaPoinTr on tree-related data.
+
+The implementation is based on three key repositories:
+
+    - The original PoinTr repository by yuxumin,
+
+    - Updated installation instructions by LucasColas,
+
+    - And treePoinTr by alBrnd.
+
+# Initial introduction by alBrnd (treePoinTR)
+
 This repository contains the PyTorch implementation for PoinTr, which was adapted for a study on point cloud completion of terrestrial laserscanning data of individual trees.
 
 The folder tree_workflow contains jupyter notebooks for:
@@ -56,6 +70,46 @@ We provide pretrained AdaPoinTr models (coming soon):
 | PCN |  [[Tsinghua Cloud](https://cloud.tsinghua.edu.cn/f/b822a5979762417ba75e/?dl=1)] / [[Google Drive](https://drive.google.com/file/d/17pE2U2T2k4w1KfmDbL6U-GkEwD-duTaF/view?usp=share_link)]  / [[BaiDuYun](https://pan.baidu.com/s/1KWccgcKXVIdVo4wJAmZ_8w?pwd=rc7p)](code:rc7p)  | CD = 6.53e-3|
 ## Usage
 
+### Instructions by LucasColas (with conda)
+
+If you're on Windows, move to WSL Ubuntu.
+conda create -n my_env python=3.11
+
+conda activate my_env
+conda install nvidia/label/cuda-12.4.0::cuda-toolkit
+
+```bash
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+
+ Check that torch detects your GPU.
+```py
+import torch
+print(f"Number of GPUs available: {torch.cuda.device_count()}")
+print(f"GPU 0 name: {torch.cuda.get_device_name(0)}")
+```
+
+```bash
+pip install "git+https://github.com/facebookresearch/pytorch3d.git"
+
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+
+git clone https://github.com/yuxumin/PoinTr.git
+
+cd PoinTr
+```
+Remove the == and the versions in requirements.txt
+```bash
+pip install -r requirements.txt
+
+pip install extensions/chamfer_dist extensions/cubic_feature_sampling extensions/gridding extensions/gridding_loss
+
+pip install "git+https://github.com/LucasColas/Pointnet2_PyTorch.git#egg=pointnet2_ops&subdirectory=pointnet2_ops_lib"
+
+pip install --upgrade https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl
+
+```
+
 ### Requirements
 
 - PyTorch >= 1.7.0
@@ -66,6 +120,10 @@ We provide pretrained AdaPoinTr models (coming soon):
 - timm
 - open3d
 - tensorboardX
+
+Add by Katnips :
+- matplotlib = 3.7.0
+- numpy = 1.23.5
 
 ```
 pip install -r requirements.txt

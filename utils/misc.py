@@ -224,7 +224,6 @@ def get_ptcloud_img(ptcloud):
     fig.canvas.draw()
     img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
     img = img.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
-    plt.close()
     return img
 
 
@@ -272,9 +271,6 @@ def random_scale(partial, gt, scale_range=[0.8, 1.2]):
     scale = torch.rand(1).cuda() * (scale_range[1] - scale_range[0]) + scale_range[0]
     return partial * scale, gt * scale
 
-def random_scale_pc(pc, scale_range=[0.8, 1.2]):
-    scale = torch.rand(1) * (scale_range[1] - scale_range[0]) + scale_range[0]
-    return pc * scale
 
 
 from torch.optim.lr_scheduler import _LRScheduler
