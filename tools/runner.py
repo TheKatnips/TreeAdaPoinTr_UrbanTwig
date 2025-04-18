@@ -10,8 +10,8 @@ from utils.AverageMeter import AverageMeter
 from utils.metrics import Metrics
 from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
 
-#from rpy2.robjects.packages import importr #useless
-#import rpy2.robjects as robjects #useless
+#from rpy2.robjects.packages import importr
+#import rpy2.robjects as robjects
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
