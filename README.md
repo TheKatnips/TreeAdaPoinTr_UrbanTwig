@@ -4,11 +4,15 @@ This repository contains an implementation of treePoinTr, a model designed for c
 
 The implementation is based on three key repositories:
 
-    - The original PoinTr repository by yuxumin,
+- The original PoinTr repository by yuxumin,
 
-    - Updated installation instructions by LucasColas,
+- Updated installation instructions by LucasColas,
+  
+- And treePoinTr by alBrnd.
 
-    - And treePoinTr by alBrnd.
+Important : The folder containing all the models, datasets, and inferences is too large, so it will be available via a link. 
+It also contains the updated Jupyter script to apply the model to an entire tree, slicing it into chunks to apply the model.
+
 
 # Initial introduction by alBrnd (treePoinTR)
 
