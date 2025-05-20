@@ -1,3 +1,6 @@
-treepointr_data_models_tests/
-treepointr_v2/
+data_training/
+models_for_inference/
+data_clean/
+data_brut/
+experiments/
 
