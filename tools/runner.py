@@ -165,8 +165,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
            
            
             ret = base_model(partial)
-            print("partial.size(1): " + str(partial.size(1)))
-            print(gt.size(1))           
+            #print("partial.size(1): " + str(partial.size(1)))
+            #print(gt.size(1))           
             
             sparse_loss, dense_loss = base_model.module.get_loss(ret, gt, epoch)
          

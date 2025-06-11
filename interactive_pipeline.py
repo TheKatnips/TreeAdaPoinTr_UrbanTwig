@@ -84,47 +84,63 @@ def update_summary_table(
     print(f"✅ Summary updated at {summary_path}")
 
 
-# Function to split the tree into chunks
-def cut_point_cloud(point_cloud, outpath, scale_fraction):
-    import time
-    import glob
-    import numpy as np
+# Function to split the tree point cloud into chunks with adaptive cube sizes
+def streamlit_cut_point_cloud(point_cloud, outpath, cube_sizes, sampling_method='fps'):
+    """
+    Splits a point cloud into smaller cubes for inference.
+
+    Args:
+        point_cloud (np.ndarray): Nx3 array of points.
+        outpath (str or Path): Directory to save the cubes.
+        cube_sizes (list or tuple): List of cube edge lengths (float), e.g. [1.0, 0.5, 0.25, 0.1].
+        sampling_method (str): Sampling method to reduce points in cubes ('fps' or 'random').
+    Returns:
+        tuple: (points_before_cut, points_after_cut, time_taken_seconds)
+    """
 
     start_cut_time = time.time()
     pts_before = point_cloud.shape[0]
 
-    # Create Streamlit progress UI
+    # Create Streamlit UI elements for progress and status
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # Run the chunking with FPS and progress
-    newtree2cubes.scale_adaptive_cut_with_fps(
+    # Call the main cutting function
+    newtree2cubes.cut_point_cloud(
         point_cloud=point_cloud,
         outpath=str(outpath),
-        scale_fraction=scale_fraction,
+        cube_sizes=cube_sizes,
         min_points=500,
         max_points=2048,
         target_points=2048,
+        sampling_method=sampling_method,
         progress_bar=progress_bar,
-        status_text=status_text
+        status_text=status_text,
+        offsets=None  # You can customize offsets if needed
     )
 
-    # Count points after cutting
-    chunk_files = glob.glob(str(outpath) + "/cube*.txt")
-    pts_after_cut = sum(np.loadtxt(f).shape[0] for f in chunk_files)
+    # Count total points in all chunk files after cutting
+    chunk_files = glob.glob(str(outpath) + "/grid_*/*.txt")
+    pts_after_cut = 0
+    for f in chunk_files:
+        data = np.loadtxt(f)
+        if data.size > 0:
+            pts_after_cut += data.shape[0]
+
 
     cut_time = time.time() - start_cut_time
 
-    # Clear the progress bar and status text
+    # Clear Streamlit UI elements
     progress_bar.empty()
     status_text.empty()
 
-    # ✅ Display results
+    # Display summary
     st.write(f"Total points before cutting: {pts_before}")
     st.write(f"Total points after cutting: {pts_after_cut}")
     st.write(f"Cutting time: {cut_time:.2f} seconds")
 
     return pts_before, pts_after_cut, cut_time
+
 
 # Function to generate flipped versions of the chunks
 def generate_flipped_chunks(outpath):
@@ -243,14 +259,24 @@ st.title("treePoinTr v2 - Point Cloud Completion")
 model_name = st.selectbox("Select a model", ["TheGrove80realTLS20", "supermodel"])
 tree_name = st.selectbox("Select a dataset", ["tls_labo_1_ultra_high", "tls_labo_2", "tls_BLK360_T05_Fagus", "tls_BLK360_T06_Fagus", "tls_BLK360_T17_Fagus", "tls_BLK360_T12_Quercus", "tls_real_rennes_Qru_01", "colmap_real_rennes_Qru_01"])
 
-# Chunking parameters
-scale_fraction = st.slider(
-    "Relative cube size (% of tree size)", 
-    min_value=0.5, 
-    max_value=100.0, 
-    value=5.0, 
-    step=1.0
-) / 100.0
+# Sizes
+st.write(
+"""
+Specify 4 fixed cube sizes (in meters) for creating voxels, e.g. 1.0 for 1m³ cubes  0.7937 for 0.5m³.
+
+**Note:** Four grids are used with fixed offsets to improve coverage:  
+- Grid 1: no offset  
+- Grid 2: shifted by half the 2nd cube size in all directions  
+- Grid 3: shifted by negative half the 3rd cube size in all directions  
+- Grid 4: shifted down by 0.3m along Z-axis only
+"""
+)
+cube_size_1 = st.number_input("Cube size 1 (m)", value=1.0, min_value=0.01, step=0.1, format="%.2f")
+cube_size_2 = st.number_input("Cube size 2 (m)", value=1.0, min_value=0.01, step=0.1, format="%.2f")
+cube_size_3 = st.number_input("Cube size 3 (m)", value=1.0, min_value=0.01, step=0.01, format="%.3f")
+cube_size_4 = st.number_input("Cube size 4 (m)", value=1.0, min_value=0.01, step=0.01, format="%.3f")
+
+cube_sizes = [cube_size_1, cube_size_2, cube_size_3, cube_size_4]
 
 # Define paths
 project_root = Path(__file__).resolve().parent
@@ -259,7 +285,7 @@ tree_dir = project_root / "data_clean" / tree_name
 inference_dir = project_root / "inferences"
 
 infile = tree_dir / f"{tree_name}.xyz"
-chunk_params = f"scale_{int(scale_fraction * 100)}"
+chunk_params = "_".join([f"{sz:.3f}".rstrip('0').rstrip('.') for sz in cube_sizes])
 outpath_chunks = tree_dir / f"chunks_{chunk_params}"
 pred_path = inference_dir / model_name / tree_name / f"inf_chunks_{chunk_params}"
 
@@ -289,6 +315,12 @@ if st.button("Load point cloud"):
         st.error("❌ Failed to load point cloud.")
         st.exception(e)
 
+target_points = st.selectbox(
+    "Number of points after downsampling :", 
+    options=[2048, 4096, 8192], 
+    index=0  # par défaut 2048
+)
+
 # Split the point cloud into cubes
 if st.button("Split tree into cubes"):
     if st.session_state.point_cloud is not None:
@@ -297,7 +329,13 @@ if st.button("Split tree into cubes"):
             st.warning(f"⚠️ The chunks already exist in {outpath_chunks}. Step skipped.")
         else:
             # Split the point cloud into chunks
-            pts_before, pts_after_cut, cut_time = cut_point_cloud(st.session_state.point_cloud, outpath_chunks, scale_fraction) # Cut the point cloud and count the points
+            pts_before, pts_after_cut, cut_time = streamlit_cut_point_cloud(
+                st.session_state.point_cloud, 
+                outpath_chunks, 
+                cube_sizes=cube_sizes,
+                sampling_method='fps',
+                target_points=target_points
+            )
             st.session_state.cut_time = cut_time # Store the cutting time
             st.session_state.pts_before_cut = pts_before # Store the number of points before cutting
             st.session_state.pts_after_cut = pts_after_cut # Store the number of points after cutting
@@ -345,9 +383,11 @@ if st.button("Show terminal command"):
     st.code(command, language='bash')
     st.write("Copy and paste this command into your terminal to run the inference manually.")
 
+
 # Assemble the normal and flipped results
+
 if st.button("Assemble predicted point clouds"):
-    files_found = glob.glob(str(pred_path) + "/*.xyz") 
+    files_found = glob.glob(str(pred_path) + "/*.xyz")
     if not files_found:
         st.warning("No .xyz files found in the inference folder.")
     elif (pred_path / "completion.xyz").exists() or (pred_path / "completion_withflips.xyz").exists():
@@ -355,24 +395,19 @@ if st.button("Assemble predicted point clouds"):
         st.code(str(pred_path / "completion.xyz"))
         st.code(str(pred_path / "completion_withflips.xyz"))
     else:
-        full_pred = np.empty((0, 3)) 
-        pred1 = np.empty((0, 3))
-        predflip = np.empty((0, 3))
+        pred_normal = np.empty((0, 3))
+        pred_flip = np.empty((0, 3))
 
         for file in files_found:
-            data = np.loadtxt(file, delimiter=" ") 
-            filename = os.path.basename(file)
-            newfile = np.column_stack((data[:, 2], data[:, 1], data[:, 0]))  # swap x <-> z if necessary
+            data = np.loadtxt(file, delimiter=" ")
 
-            if "flip" in filename:
-                predflip = np.concatenate((predflip, newfile), 0)   
+            if "flip" in os.path.basename(file):
+                pred_flip = np.vstack((pred_flip, data))
             else:
-                newfile = data  # keep original coordinates
-                pred1 = np.concatenate((pred1, newfile), 0)
+                pred_normal = np.vstack((pred_normal, data))
 
-        # Safe writing only if the files do not already exist
-        np.savetxt(pred_path / "completion.xyz", pred1, fmt="%.16f")
-        np.savetxt(pred_path / "completion_withflips.xyz", predflip, fmt="%.16f")
+        np.savetxt(pred_path / "completion.xyz", pred_normal, fmt="%.16f")
+        np.savetxt(pred_path / "completion_withflips.xyz", pred_flip, fmt="%.16f")
 
         st.success("✅ Prediction merging complete.")
         st.write("📂 Saved files:")
