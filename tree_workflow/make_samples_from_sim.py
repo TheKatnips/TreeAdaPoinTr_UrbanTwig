@@ -14,6 +14,65 @@ import os
 import json
 import shutil
 
+def fps_downsample(points, num_points): # function for treepointr v2
+    'Downsample a point cloud using farthest point sampling'
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    if len(points) < num_points:
+        return points  # return original points if not enough points
+    pcd = pcd.farthest_point_down_sample(num_points) 
+    return np.asarray(pcd.points)
+
+
+def generate_sample_centers(pc, num_samples, cube_size=1, min_volume=0.5, save_path=None, max_attempts=10000):
+    """
+    Generate random sample centers from a point cloud, ensuring the cube around each center
+    has a bounding box volume >= min_volume. Stops when num_samples valid centers found or max_attempts reached.
+    
+    Args:
+        pc: numpy array (N,3) point cloud
+        num_samples: int, number of valid centers to find
+        cube_size: float, edge length of cube around center, e.g. 0.7937 for ~0.5 m³ or 1 for 1 m³
+        min_volume: float, minimum bounding box volume inside cube to accept center
+        save_path: str or None, where to save centers npy
+        max_attempts: int, max attempts to find valid centers
+        
+    Returns:
+        centers: numpy array (num_samples, 3) of valid centers
+    """
+    centers = []
+    n_points = pc.shape[0]
+    attempts = 0
+    
+    while len(centers) < num_samples and attempts < max_attempts:
+        idx = np.random.randint(0, n_points)
+        candidate_center = pc[idx]
+        
+        # Sélection des points dans le cube autour du centre candidat
+        mask = np.all(np.abs(pc - candidate_center) <= cube_size / 2, axis=1)
+        points_in_cube = pc[mask]
+        
+        if points_in_cube.shape[0] == 0:
+            attempts += 1
+            continue
+        
+        bbox = points_in_cube.max(axis=0) - points_in_cube.min(axis=0)
+        volume = np.prod(bbox)
+        
+        if volume >= min_volume:
+            centers.append(candidate_center)
+        attempts += 1
+    
+    centers = np.array(centers)
+    if save_path is not None:
+        np.save(save_path, centers)
+    
+    if len(centers) < num_samples:
+        print(f"Warning: Only found {len(centers)} valid centers out of requested {num_samples} after {attempts} attempts.")
+    
+    return centers
+
+
 def bounding_box(points, min_x=-np.inf, max_x=np.inf, min_y=-np.inf,
                         max_y=np.inf, min_z=-np.inf, max_z=np.inf):
     """ Compute a bounding_box filter on the given points
@@ -51,9 +110,9 @@ def bounding_box(points, min_x=-np.inf, max_x=np.inf, min_y=-np.inf,
 
 
 
-def mksamples_sim(fulltree_path, sim_path, outpath, start_count=0, stop_count=100, boxsize=0.5):
+def mksamples_sim(fulltree_path, sim_path, outpath, centers, start_count=0, stop_count=100, boxsize=0.5, nb_points=8192) : # 0.5 or boxsize=0.3968 to have 0.5m3 instead of 1m3
 
-    n_points = 8192
+    n_points = nb_points # number of points in complete point cloud sample
      
     file = os.listdir(fulltree_path)
     
@@ -79,10 +138,10 @@ def mksamples_sim(fulltree_path, sim_path, outpath, start_count=0, stop_count=10
          if item.endswith('.ply'):
              ply_cloud = o3d.io.read_point_cloud(fulltree_path+item) 
              pc = np.asarray(ply_cloud.points)
-
         
 
         # generate point cloud samples of bb size s for random locations in tree
+        # 'centers' is already passed as an argument and assumed to be precomputed
          count = start_count
             # number of samples:
          n = stop_count
@@ -90,10 +149,13 @@ def mksamples_sim(fulltree_path, sim_path, outpath, start_count=0, stop_count=10
          while count in range(n):
                 # select a random point (row)
                 number_of_rows = pc.shape[0]
-                random_indices = np.random.choice(number_of_rows, size=1, replace=False)
+                # new :
+                row = centers[count].reshape(1, 3)
+                #old :
+                #random_indices = np.random.choice(number_of_rows, size=1, replace=False) 
                 # display random rows
                 #print("\nRandom row:")
-                row = pc[random_indices, :]
+                #row = pc[random_indices, :]
                 #print(row)
                 
                 
@@ -120,8 +182,13 @@ def mksamples_sim(fulltree_path, sim_path, outpath, start_count=0, stop_count=10
                 
                     # downsample complete point cloud to n_points points
                     number_of_rows = pc_sample.shape[0]
-                    random_indices = np.random.choice(number_of_rows, size=n_points, replace=False)
-                    pc_sample = pc_sample[random_indices,:]
+
+                    # random sampling (old method):
+                    #random_indices = np.random.choice(number_of_rows, size=n_points, replace=False)
+                    #pc_sample = pc_sample[random_indices,:]
+
+                    # downsample using farthest point sampling (new method):
+                    pc_sample = fps_downsample(pc_sample, n_points) # treepointr v2
                     
                     # make data output directory for each tree
                     if not os.path.exists(outpath+"complete/"+treename):
@@ -143,7 +210,7 @@ def mksamples_sim(fulltree_path, sim_path, outpath, start_count=0, stop_count=10
                                 ppc = np.loadtxt(file_path, delimiter=' ')
                                 ppc_bb_filter = bounding_box(ppc, min_x, max_x, min_y, max_y, min_z, max_z)
                                 ppc_sample = ppc[ppc_bb_filter,:]                
-                                arrays[file] = ppc_sample                     
+                                arrays[file] = ppc_sample
     
                     
                         # Generate combinations of arrays
@@ -206,11 +273,97 @@ def mksamples_sim(fulltree_path, sim_path, outpath, start_count=0, stop_count=10
                         count += 1
 
 
+def mksamples_sim_for_one_tree(pc, sim_path, outpath, centers, treename, start_count=0, stop_count=100, boxsize=0.5, nb_points=8192):
+
+    n_points = nb_points
+    s = boxsize
+
+    # Make data output directory 
+    if not os.path.exists(outpath+"/train/"):
+        os.makedirs(outpath+"/train/")
+    outpath = outpath+"/train/"
+
+    # Load all partial point clouds once (raw, unfiltered)
+    directory = os.path.join(sim_path, f"{treename}.obj")
+    arrays_raw = {}
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".xyz"):
+                file_path = os.path.join(root, file)
+                ppc = np.loadtxt(file_path, delimiter=' ')
+                arrays_raw[file] = ppc
+
+    count = start_count
+    n = stop_count
+
+    while count < n:
+        # Get center point from centers
+        row = centers[count].reshape(1, 3)
+
+        # Bounding box coordinates
+        min_x = row[0,0]-s
+        max_x = row[0,0]+s
+        min_y = row[0,1]-s
+        max_y = row[0,1]+s
+        min_z = row[0,2]-s
+        max_z = row[0,2]+s
+
+        # Filter points in bounding box for complete cloud
+        pc_bb_filter = bounding_box(pc, min_x, max_x, min_y, max_y, min_z, max_z)
+        pc_sample = pc[pc_bb_filter,:]
+
+        if len(pc_sample) > n_points:
+            # Downsample using farthest point sampling
+            pc_sample = fps_downsample(pc_sample, n_points)
+
+            # Directories for complete samples
+            complete_dir = os.path.join(outpath, "complete", treename)
+            if not os.path.exists(complete_dir):
+                os.makedirs(complete_dir)
+
+            # Filter partial clouds by bounding box for current sample
+            arrays = {}
+            for file, ppc in arrays_raw.items():
+                bb_filter = bounding_box(ppc, min_x, max_x, min_y, max_y, min_z, max_z)
+                ppc_sample = ppc[bb_filter, :]
+                arrays[file] = ppc_sample
+
+            # Generate combinations of partial clouds
+            combinations = set()
+            for file1, array1 in arrays.items():
+                for file2, array2 in arrays.items():
+                    if file1 != file2:
+                        combination_key = frozenset([file1, file2])
+                        if combination_key not in combinations:
+                            combined = np.concatenate((array1, array2), axis=0)
+                            combinations.add(combination_key)
+                            if n_points/3 < len(combined):
+                                outdir = os.path.join(outpath, "partial", treename, f"{treename}_{count}_size{2*s}")
+                                os.makedirs(outdir, exist_ok=True)
+                                npy_file = f"{treename}_{count}_size{2*s}_{file1[:-4]}_and_{file2[:-4]}.npy"
+                                np.save(os.path.join(outdir, npy_file), combined[:, 0:3])
+
+            # Save individual partial clouds
+            for file1, array1 in arrays.items():
+                if n_points/3 < len(array1):
+                    outdir = os.path.join(outpath, "partial", treename, f"{treename}_{count}_size{2*s}")
+                    os.makedirs(outdir, exist_ok=True)
+                    npy_file = f"{treename}_{count}_size{2*s}_{file1[:-4]}.npy"
+                    np.save(os.path.join(outdir, npy_file), array1[:, 0:3])
+
+            # Save complete sample
+            outname = os.path.join(outpath, "complete", treename, f"{treename}_{count}_size{2*s}.npy")
+            np.save(outname, pc_sample[:, 0:3])
+
+            count += 1
+        else:
+            # Skip samples that are too small but still advance the count
+            count += 1
 
 
 
-
-def traintest_json(complete_dir_train, output_path, dataset_name):
+# Old function
+def traintest_json_original(complete_dir_train, output_path, dataset_name):
 
     dict_lst = [] 
        
@@ -262,11 +415,174 @@ def traintest_json(complete_dir_train, output_path, dataset_name):
         outfile.write(json_object)
 
 
+# New function
+def traintest_json(complete_dir_train, output_path, dataset_name):
+    dict_lst = []
+    
+    banrs = os.listdir(complete_dir_train)  # taxonomy folders
+    for banr in banrs:
+        complete_path = os.path.join(complete_dir_train, banr)
+        partial_path = os.path.join(output_path, "train", "partial", banr)
+        
+        if not os.path.isdir(complete_path):
+            continue
+        
+        complete_files = [f for f in os.listdir(complete_path) if f.endswith('.npy')]
+        # original name without suffixes
+        base_names = set(os.path.splitext(f)[0] for f in complete_files)
+
+        
+        valid_bases = []
+        for base in base_names:
+            # check if the base name exists in the partial directory
+            try:
+                partial_files = os.listdir(partial_path)
+                matches = [f for f in partial_files if f.startswith(base)]
+                if matches:
+                    valid_bases.append(base)
+            except FileNotFoundError:
+                continue  # aucun fichier partial pour ce banr
+        
+        if not valid_bases:
+            print(f"No valid match {banr}, skip.")
+            continue
+        
+        # Split
+        test_bases = random.sample(valid_bases, int(len(valid_bases)*0.2))
+        train_bases = [b for b in valid_bases if b not in test_bases]
+
+        test_files = [f for f in complete_files if any(f.startswith(b) for b in test_bases)]
+        train_files = [f for f in complete_files if any(f.startswith(b) for b in train_bases)]
+
+        dictionary = {
+            "taxonomy_id": str(banr),
+            "taxonomy_name": str(banr),
+            "test": [os.path.splitext(f)[0] for f in test_files],
+            "train": [os.path.splitext(f)[0] for f in train_files],
+            "val": []
+        }
+        dict_lst.append(dictionary)
+
+        # Move the test files to the test folder structure
+        for file in test_files:
+            # complete
+            src_complete = os.path.join(complete_dir_train, banr, file)
+            dst_complete = os.path.join(output_path, "test", "complete", banr, file)
+            os.makedirs(os.path.dirname(dst_complete), exist_ok=True)
+            shutil.move(src_complete, dst_complete)
+            
+            # partial
+            partial_base = file.split('.')[0]  # ex: ash1_6
+            partial_dir = os.path.join(output_path, "train", "partial", banr)
+            try:
+                partial_matches = [f for f in os.listdir(partial_dir) if f.startswith(partial_base)]
+                if partial_matches:
+                    for pf in partial_matches:
+                        src = os.path.join(partial_dir, pf)
+                        dst = os.path.join(output_path, "test", "partial", banr, pf)
+                        os.makedirs(os.path.dirname(dst), exist_ok=True)
+                        
+                        if os.path.exists(src):
+                            shutil.move(src, dst)
+                        else:
+                            print(f"[!] Can't file the file while moving : {src}")
+            except FileNotFoundError:
+                print(f"[!] File missing : {partial_dir}")
 
 
+    # Save JSON
+    json_path = os.path.join(output_path, dataset_name + ".json")
+    with open(json_path, "w") as f:
+        json.dump(dict_lst, f, indent=4)
 
 
+# New split with train/test/val
+def traintestval_json(complete_dir_train, output_path, dataset_name, val_ratio=0.1, test_ratio=0.1, seed=42):
+    random.seed(seed)
+    dict_lst = []
+    
+    banrs = os.listdir(complete_dir_train)  # taxonomy folders
+    for banr in banrs:
+        complete_path = os.path.join(complete_dir_train, banr)
+        partial_path = os.path.join(output_path, "train", "partial", banr)
+        
+        if not os.path.isdir(complete_path):
+            continue
+        
+        complete_files = [f for f in os.listdir(complete_path) if f.endswith('.npy')]
+        base_names = set(os.path.splitext(f)[0] for f in complete_files)
 
+        valid_bases = []
+        for base in base_names:
+            try:
+                partial_files = os.listdir(partial_path)
+                matches = [f for f in partial_files if f.startswith(base)]
+                if matches:
+                    valid_bases.append(base)
+            except FileNotFoundError:
+                continue
+        
+        if not valid_bases:
+            print(f"No valid match {banr}, skip.")
+            continue
+        
+        n = len(valid_bases)
+        n_test = int(n * test_ratio)
+        n_val = int(n * val_ratio)
+        
+        test_bases = random.sample(valid_bases, n_test)
+        remaining = [b for b in valid_bases if b not in test_bases]
+        val_bases = random.sample(remaining, n_val)
+        train_bases = [b for b in remaining if b not in val_bases]
+
+        def files_for_bases(bases):
+            return [f for f in complete_files if any(f.startswith(b) for b in bases)]
+
+        test_files = files_for_bases(test_bases)
+        val_files = files_for_bases(val_bases)
+        train_files = files_for_bases(train_bases)
+
+        dictionary = {
+            "taxonomy_id": str(banr),
+            "taxonomy_name": str(banr),
+            "train": [os.path.splitext(f)[0] for f in train_files],
+            "val": [os.path.splitext(f)[0] for f in val_files],
+            "test": [os.path.splitext(f)[0] for f in test_files]
+        }
+        dict_lst.append(dictionary)
+
+        def move_files(files, split_name):
+            for file in files:
+                # complete
+                src_complete = os.path.join(complete_dir_train, banr, file)
+                dst_complete = os.path.join(output_path, split_name, "complete", banr, file)
+                os.makedirs(os.path.dirname(dst_complete), exist_ok=True)
+                shutil.move(src_complete, dst_complete)
+                
+                # partial
+                partial_base = file.split('.')[0]
+                partial_dir = os.path.join(output_path, "train", "partial", banr)
+                try:
+                    partial_matches = [f for f in os.listdir(partial_dir) if f.startswith(partial_base)]
+                    for pf in partial_matches:
+                        src = os.path.join(partial_dir, pf)
+                        dst = os.path.join(output_path, split_name, "partial", banr, pf)
+                        os.makedirs(os.path.dirname(dst), exist_ok=True)
+                        if os.path.exists(src):
+                            shutil.move(src, dst)
+                        else:
+                            print(f"[!] Missing file while moving: {src}")
+                except FileNotFoundError:
+                    print(f"[!] Missing partial dir: {partial_dir}")
+
+        move_files(test_files, "test")
+        move_files(val_files, "val")
+
+    json_path = os.path.join(output_path, dataset_name + ".json")
+    with open(json_path, "w") as f:
+        json.dump(dict_lst, f, indent=4)
+
+    print(f"Split done. JSON saved at: {json_path}")
 
 
 # write json for train/test set definitions
