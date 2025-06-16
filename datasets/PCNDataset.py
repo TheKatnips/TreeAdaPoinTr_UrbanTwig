@@ -120,7 +120,7 @@ class PCN(data.Dataset):
         if self.transforms is not None:
             data = self.transforms(data)
 
-        return sample['taxonomy_id'], sample['model_id'], (data['partial'], data['gt'], data['file_name'])
+        return sample['taxonomy_id'], sample['model_id'], (data['gt'], data['partial'], data['file_name'])
 
     def __len__(self):
         return len(self.file_list)
