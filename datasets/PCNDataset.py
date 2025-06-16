@@ -39,8 +39,14 @@ class PCN(data.Dataset):
         self.transforms = self._get_transforms(self.subset)
 
     def _get_transforms(self, subset):
-        # Only apply ToTensor; no data augmentation or upsampling
+        # Same number of points for each patial + tensor conversion
         return data_transforms.Compose([{
+            'callback': 'RandomSamplePoints', 
+            'parameters': {
+                'n_points': 2731  # TODO : if gt is 8192, change to 2731 / and if gt is 2048, change to 683 (1/3 of 2048)
+            },
+            'objects': ['partial']
+        }, {
             'callback': 'ToTensor',
             'objects': ['partial', 'gt']
         }])
