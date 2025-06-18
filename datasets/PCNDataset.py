@@ -1,4 +1,4 @@
-# Dadaloader for treepointr v2, based on the PCN dataset.
+# Dataloader for treepointr v2, based on the PCN dataset.
 
 import torch.utils.data as data
 import numpy as np
@@ -13,9 +13,6 @@ import json
 from .build import DATASETS
 from utils.logger import *
 
-# Reference implementation inspired from:
-# https://github.com/hzxie/GRNet/blob/master/utils/data_loaders.py
-
 @DATASETS.register_module()
 class PCN(data.Dataset):
     def __init__(self, config):
@@ -24,14 +21,12 @@ class PCN(data.Dataset):
         self.category_file = config.CATEGORY_FILE_PATH
         self.npoints = config.N_POINTS
         self.subset = config.subset
-        #self.cars = config.CARS
 
         # Load category and model indexing
         self.dataset_categories = []
         with open(self.category_file) as f:
             self.dataset_categories = json.loads(f.read())
             if config.CARS:
-                # Optionally filter only cars
                 self.dataset_categories = [dc for dc in self.dataset_categories if dc['taxonomy_id'] == '02958343']
 
         # Build file list and transformations
@@ -39,23 +34,36 @@ class PCN(data.Dataset):
         self.transforms = self._get_transforms(self.subset)
 
     def _get_transforms(self, subset):
-        # Same number of points for each patial + tensor conversion
-        return data_transforms.Compose([{
-            'callback': 'RandomSamplePoints', 
-            'parameters': {
-                'n_points': 2731  # TODO : if gt is 8192, change to 2731 / and if gt is 2048, change to 683 (1/3 of 2048)
-            },
-            'objects': ['partial']
-        }, {
-            'callback': 'ToTensor',
-            'objects': ['partial', 'gt']
-        }])
+        if subset == 'train':
+            return data_transforms.Compose([
+                {
+                    'callback': 'RandomSamplePoints',
+                    'parameters': {'n_points': 2048},
+                    'objects': ['partial']
+                },
+                {
+                    'callback': 'RandomMirrorPoints',
+                    'objects': ['partial', 'gt']
+                },
+                {
+                    'callback': 'ToTensor',
+                    'objects': ['partial', 'gt']
+                }
+            ])
+        else:
+            return data_transforms.Compose([
+                {
+                    'callback': 'RandomSamplePoints',
+                    'parameters': {'n_points': 2048},
+                    'objects': ['partial']
+                },
+                {
+                    'callback': 'ToTensor',
+                    'objects': ['partial', 'gt']
+                }
+            ])
 
     def _get_file_list(self, subset):
-        """
-        Construct the list of data samples based on the config and category file.
-        Each partial .npy file is treated as an independent input, paired with a single GT.
-        """
         file_list = []
 
         for dc in self.dataset_categories:
@@ -63,16 +71,12 @@ class PCN(data.Dataset):
             samples = dc[subset]
 
             for s in samples:
-                # Directory containing multiple partial views for one model
                 partial_directory = self.partial_points_path % (subset, dc['taxonomy_id'], s)
-
-                # Collect all partial .npy file paths (multiple per model)
                 partial_paths = [
                     os.path.abspath(os.path.join(partial_directory, p))
                     for p in os.listdir(partial_directory) if p.endswith(".npy")
                 ]
 
-                # For each partial file, store the corresponding GT path
                 for pp in partial_paths:
                     file_list.append({
                         'taxonomy_id': dc['taxonomy_id'],
@@ -84,45 +88,38 @@ class PCN(data.Dataset):
         print_log(f'Complete collecting files of the dataset. Total files: {len(file_list)}', logger='PCNDATASET')
         return file_list
 
-    def pc_norm(self, pc):
+    def normalize_pair(self, partial, gt):
         """
-        Normalize the point cloud to zero-mean and unit-max-norm.
-        Args:
-            pc (np.ndarray): Input point cloud (N x 3 or N x C)
-        Returns:
-            np.ndarray: Normalized point cloud
+        Normalize both GT and partial point clouds using GT's centroid and max-norm.
         """
-        centroid = np.mean(pc, axis=0)
-        pc = pc - centroid
-        m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
-        pc = pc / m
-        return pc
+        centroid = np.mean(gt, axis=0)
+        gt_centered = gt - centroid
+        scale = np.max(np.linalg.norm(gt_centered, axis=1))
+
+        gt_normalized = gt_centered / scale
+        partial_normalized = (partial - centroid) / scale
+
+        return partial_normalized, gt_normalized
 
     def __getitem__(self, idx):
-        """
-        Load a sample from the dataset: a normalized partial and GT point cloud pair.
-        """
         sample = self.file_list[idx]
         data = {}
 
-        # Load partial and GT point clouds
         partial = IO.get(sample['partial_path']).astype(np.float32)
         gt = IO.get(sample['gt_path']).astype(np.float32)
 
-        # Normalize both point clouds
-        data['partial'] = self.pc_norm(partial)
-        data['gt'] = self.pc_norm(gt)
+        # Normalize partial & gt using same transformation
+        partial, gt = self.normalize_pair(partial, gt)
+        data['partial'] = partial
+        data['gt'] = gt
 
-        # Sanity check for invalid data
         if not np.isfinite(data['partial']).all() or not np.isfinite(data['gt']).all():
-            print(f"[WARNING] Invalid values in sample: {data['file_name']}")
+            print(f"[WARNING] Invalid values in sample: {sample['partial_path']}")
 
-        # Ensure ground truth has the expected number of points
-        assert data['gt'].shape[0] == self.npoints
+        assert data['gt'].shape[0] == self.npoints, f"GT does not have expected {self.npoints} points."
 
         data['file_name'] = sample['partial_path']
 
-        # Apply transforms (currently only ToTensor)
         if self.transforms is not None:
             data = self.transforms(data)
 
