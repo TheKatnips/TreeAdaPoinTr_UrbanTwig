@@ -250,20 +250,21 @@ bash ./scripts/train.sh <GPUIDS> \
 ```
 ####  Some examples:
 
-Fine-tuning of AdaPoinTr for trees (treeAdaPoinTr_v2 by Lola Bricout)
+Fine-tuning of AdaPoinTr for trees (TreeAdaPoinTr_UrbanTwig by Lola Bricout)
 ```
-bash ./scripts/train.sh 0   
-    --config ./cfgs/tree_ada_v2_synthetic_8192_1_models/AdaPoinTr.yaml   
-    --exp_name tree_ada_v2_synthetic_8192_1   
-    --start_ckpts ./ckpts/AdaPoinTr_ps55.pth
+bash ./scripts/train.sh 0 --config ./cfgs/tree_ada_v2_synthetic_8192_1_models/AdaPoinTr.yaml --exp_name tree_ada_v2_synthetic_8192_1 --start_ckpts ./ckpts/AdaPoinTr_ps55.pth
+```
+You can check the training with TensorBoard :
+```
+tensorboard --logdir=experiments/AdaPoinTr/tree_ada_v2_synthetic_8192_1_models/TFBoard/tree_ada_v2_synthetic_8192_1
 ```
 
-A second fine-tuning of AdaPoinTr for trees (treeAdaPoinTr_v2 by Lola Bricout) - with noisy data
+A second fine-tuning of AdaPoinTr for trees (TreeAdaPoinTr_UrbanTwig by Lola Bricout) - with noisy data
 ```
-bash ./scripts/train.sh 0   
-    --config ./cfgs/tree_ada_v2_synthetic_8192_1_noise_models/AdaPoinTr.yaml   
-    --exp_name tree_ada_v2_synthetic_8192_1_noise   
-    --start_ckpts ./experiments/AdaPoinTr/tree_ada_v2_synthetic_8192_1_noise_models/tree_ada_v2_synthetic_8192_1_noise/ckpt-best.pth
+bash ./scripts/train.sh 0 --config ./cfgs/tree_ada_v2_synthetic_8192_1_noise_models/AdaPoinTr.yaml --exp_name tree_ada_v2_synthetic_8192_1_noise --start_ckpts ./experiments/AdaPoinTr/tree_ada_v2_synthetic_8192_1_models/tree_ada_v2_synthetic_8192_1/ckpt-best.pth
+```
+```
+tensorboard --logdir=experiments/AdaPoinTr/tree_ada_v2_synthetic_8192_1_noise_models/TFBoard/tree_ada_v2_synthetic_8192_1_noise
 ```
 
 Train a PoinTr model on PCN benchmark with 2 gpus:
