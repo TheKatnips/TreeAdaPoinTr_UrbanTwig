@@ -197,6 +197,7 @@ bash ./scripts/test.sh <GPU_IDS>  \
 ```
 
 ####  Some examples:
+
 Test the PoinTr (AdaPoinTr) pretrained model on the PCN benchmark or Projected_ShapeNet:
 ```
 bash ./scripts/test.sh 0 \
@@ -248,6 +249,23 @@ bash ./scripts/train.sh <GPUIDS> \
     [--val_freq <int>]
 ```
 ####  Some examples:
+
+Fine-tuning of AdaPoinTr for trees (treeAdaPoinTr_v2 by Lola Bricout)
+```
+bash ./scripts/train.sh 0   
+    --config ./cfgs/tree_ada_v2_synthetic_8192_1_models/AdaPoinTr.yaml   
+    --exp_name tree_ada_v2_synthetic_8192_1   
+    --start_ckpts ./ckpts/AdaPoinTr_ps55.pth
+```
+
+A second fine-tuning of AdaPoinTr for trees (treeAdaPoinTr_v2 by Lola Bricout) - with noisy data
+```
+bash ./scripts/train.sh 0   
+    --config ./cfgs/tree_ada_v2_synthetic_8192_1_noise_models/AdaPoinTr.yaml   
+    --exp_name tree_ada_v2_synthetic_8192_1_noise   
+    --start_ckpts ./experiments/AdaPoinTr/tree_ada_v2_synthetic_8192_1_noise_models/tree_ada_v2_synthetic_8192_1_noise/ckpt-best.pth
+```
+
 Train a PoinTr model on PCN benchmark with 2 gpus:
 ```
 CUDA_VISIBLE_DEVICES=0,1 bash ./scripts/dist_train.sh 2 13232 \
