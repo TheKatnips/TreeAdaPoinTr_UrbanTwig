@@ -21,6 +21,7 @@ class PCN(data.Dataset):
         self.category_file = config.CATEGORY_FILE_PATH
         self.npoints = config.N_POINTS
         self.subset = config.subset
+        self.partial_npoints = getattr(config, 'PARTIAL_POINTS', 2048) # Default to 2048 if not specified, fit fot a gt of 8192 points
 
         # Load category and model indexing
         self.dataset_categories = []
@@ -38,7 +39,7 @@ class PCN(data.Dataset):
             return data_transforms.Compose([
                 {
                     'callback': 'RandomSamplePoints',
-                    'parameters': {'n_points': 2048},
+                    'parameters': {'n_points': self.partial_npoints}, # Change in the yaml - 2048 if gt is 8192 ; 1024 if gt is 2048
                     'objects': ['partial']
                 },
                 {
@@ -54,7 +55,7 @@ class PCN(data.Dataset):
             return data_transforms.Compose([
                 {
                     'callback': 'RandomSamplePoints',
-                    'parameters': {'n_points': 2048},
+                    'parameters': {'n_points': self.partial_npoints}, # Change in the yaml - 2048 if gt is 8192 ; 1024 if gt is 2048
                     'objects': ['partial']
                 },
                 {

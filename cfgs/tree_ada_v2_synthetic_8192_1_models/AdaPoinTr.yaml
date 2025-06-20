@@ -1,7 +1,7 @@
 optimizer : {
   type: AdamW,
   kwargs: {
-  lr : 0.001, # Instead of 0.0001 because it's a fine-tuning
+  lr : 0.0001, # Don t try 0.001, it's not working 
   weight_decay : 0.0005
 }}
 
@@ -33,7 +33,7 @@ dataset : {
 model : {
     NAME: AdaPoinTr, 
     num_query: 512, 
-    num_points: 8192,
+    num_points: 8192, # or 2048 for other datasets
     center_num: [512, 256],
     global_feature_dim: 1024, 
     encoder_type: graph,
@@ -62,12 +62,9 @@ model : {
     }
 }
   
-total_bs : 6               # Actual batch size per step (small to fit in 8GB GPU memory)
-step_per_update : 3        # Accumulate gradients for 3 steps before updating weights
-                           # eg. → Simulates an effective batch size of 6 × 3 = 18
-                           # → Useful for stable training on memory-limited hardware
-
+total_bs : 6               # If the GPU has only 8GB GPU memory -> small tests with bs 6 and step_per_update 3 / else : bs 48 and step_per_update 1
+step_per_update : 3    
 max_epoch : 600            
 
 # Evaluation metric
-consider_metric: CDL2      # Use Chamfer Distance L2 (squared Euclidean distance) 
+consider_metric: CDL1      # Use Chamfer Distance L1 (for l2, you have to edit the model directly)

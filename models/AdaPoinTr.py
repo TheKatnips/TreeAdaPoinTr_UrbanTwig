@@ -930,6 +930,7 @@ class AdaPoinTr(nn.Module):
     def get_loss(self, ret, gt, epoch=1):
         pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
         
+        print(f"pred_fine.shape = {pred_fine.shape}, gt.shape = {gt.shape}")
         assert pred_fine.size(1) == gt.size(1)
 
         # denoise loss

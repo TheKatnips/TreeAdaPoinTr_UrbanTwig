@@ -1,0 +1,13 @@
+NAME: PCN
+CATEGORY_FILE_PATH: data_training/after_split_with_noise/tree_ada_v2_synthetic_8192_1_noisy/tree_ada_v2_synthetic_8192_1.json
+N_POINTS: 8192 # 2048 or 8192 points (gt)
+PARTIAL_POINTS: 2048 # 2048 if gt 8192 / 1024 if gt 2048
+PARTIAL_POINTS_PATH: data_training/after_split_with_noise/tree_ada_v2_synthetic_8192_1_noisy/%s/partial/%s/%s 
+COMPLETE_POINTS_PATH: data_training/after_split_with_noise/tree_ada_v2_synthetic_8192_1_noisy/%s/complete/%s/%s.npy
+CARS: FALSE
+
+# Other changes to make (TODO) : 
+
+# - check cfgs/your_model/AdaPoinTr.yaml 
+# adapt dataset 
+# total_bs and step_per_update -> according your GPU
