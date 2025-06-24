@@ -1,5 +1,8 @@
 # Introduction by Katnips
 
+🚧 WORK IN PROGRESS -  🚧
+![Status](https://img.shields.io/badge/status-in%20progress-yellow)
+
 This repository contains an implementation of treePoinTr, a model designed for completing tree point clouds using the PoinTr architecture. The focus of this project is on fine-tuning treePoinTr with different datasets, conducting tests, and comparing the performance of PoinTr with AdaPoinTr on tree-related data.
 
 The implementation is based on three key repositories:
