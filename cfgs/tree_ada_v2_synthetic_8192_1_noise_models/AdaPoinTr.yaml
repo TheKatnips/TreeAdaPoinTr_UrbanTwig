@@ -23,11 +23,11 @@ bnmscheduler: {
 }}
 
 dataset : {
-  train : { _base_: cfgs/dataset_configs/tree_ada_v2_synthetic_8192_1.yaml, 
+  train : { _base_: cfgs/dataset_configs/tree_ada_v2_synthetic_8192_1_noise.yaml, 
             others: {subset: 'train'}},
-  val : { _base_: cfgs/dataset_configs/tree_ada_v2_synthetic_8192_1.yaml, 
+  val : { _base_: cfgs/dataset_configs/tree_ada_v2_synthetic_8192_1_noise.yaml, 
             others: {subset: 'test'}},
-  test : { _base_: cfgs/dataset_configs/tree_ada_v2_synthetic_8192_1.yaml, 
+  test : { _base_: cfgs/dataset_configs/tree_ada_v2_synthetic_8192_1_noise.yaml, 
             others: {subset: 'test'}}}     
             
 model : {
@@ -62,7 +62,7 @@ model : {
     }
 }
   
-total_bs : 48               # If the GPU has only 8GB GPU memory -> small tests with bs 6 and step_per_update 3 / else : bs 48 and step_per_update 1
+total_bs : 48               # If the GPU has only 8GB GPU memory : small tests with bs 6 and step_per_update 3 / else : bs 48 and step_per_update 1
 step_per_update : 1    
 max_epoch : 600            
 
