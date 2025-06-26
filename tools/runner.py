@@ -14,14 +14,24 @@ from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
 #import rpy2.robjects as robjects
 
 def run_net(args, config, train_writer=None, val_writer=None):
+    device = None  # SLURM : add
     logger = get_logger(args.log_name)
     # build dataset
     (train_sampler, train_dataloader), (_, test_dataloader) = builder.dataset_builder(args, config.dataset.train), \
                                                             builder.dataset_builder(args, config.dataset.val)
     # build model
     base_model = builder.model_builder(config.model)
+    #if args.use_gpu: # SLURM : suppress
+    #    base_model.to(args.local_rank) # SLURM : suppress
+    # SLURM : add :
     if args.use_gpu:
-        base_model.to(args.local_rank)
+        device = torch.device(f'cuda:{args.local_rank}' if torch.cuda.is_available() else 'cpu')
+        base_model.to(device)
+        print(f">>> Model moved to device: {device}")
+    else:
+        device = torch.device("cpu")
+        base_model.to(device)
+        print(f">>> WARNING: GPU not used, model on CPU!")
 
     # from IPython import embed; embed()
     
@@ -116,8 +126,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
             if dataset_name == 'PCN' or dataset_name == 'Completion3D' or 'ProjectShapeNet' in dataset_name:
                 #gt = scale*data[0].cuda()
                 #partial = scale*data[1].cuda() # appply scale factor
-                partial = data[1].cuda()
-                gt = data[0].cuda() 
+                partial = data[1].to(device) # SLURM .cuda() -> .to(device)
+                gt = data[0].to(device) # SLURM .cuda() -> .to(device)
 
                 
                 #filepath = data[2][0]  #data[2] stands for file_path, which is a list of filepaths
